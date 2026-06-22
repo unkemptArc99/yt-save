@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path name="downloads" path="Download/YTSave/" />
+    <external-path name="movies" path="Movies/YTSave/" />
+    <external-path name="music" path="Music/YTSave/" />
+    <cache-path name="temp" path="downloads/" />
+</paths>
