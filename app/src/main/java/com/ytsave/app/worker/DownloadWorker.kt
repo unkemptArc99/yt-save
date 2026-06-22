@@ -115,6 +115,11 @@ class DownloadWorker @AssistedInject constructor(
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()
+            val errorMessage = e.message?.lowercase() ?: ""
+            if (errorMessage.contains("network") || errorMessage.contains("timeout") || errorMessage.contains("resolve host") || errorMessage.contains("unreachable")) {
+                updateDownloadError(downloadId, "Network error. Retrying...")
+                return@withContext Result.retry()
+            }
             updateDownloadError(downloadId, e.message ?: "Unknown error")
             Result.failure()
         }

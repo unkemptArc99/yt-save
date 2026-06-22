@@ -32,8 +32,13 @@ class DownloadVideoUseCase @Inject constructor(
             .putString(DownloadWorker.KEY_TYPE, downloadType)
             .build()
             
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+            .build()
+            
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setInputData(inputData)
+            .setConstraints(constraints)
             .addTag(downloadId.toString())
             .build()
             
