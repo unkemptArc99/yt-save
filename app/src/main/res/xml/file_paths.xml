@@ -4,4 +4,5 @@
     <external-path name="movies" path="Movies/YTSave/" />
     <external-path name="music" path="Music/YTSave/" />
     <cache-path name="temp" path="downloads/" />
+    <external-files-path name="updates" path="Download/" />
 </paths>

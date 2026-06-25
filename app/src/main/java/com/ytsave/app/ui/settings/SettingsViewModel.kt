@@ -3,6 +3,7 @@ package com.ytsave.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ytsave.app.data.local.PreferencesManager
+import com.ytsave.app.data.engine.AppUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +13,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val appUpdater: AppUpdater
 ) : ViewModel() {
 
     val defaultFormat: StateFlow<String> = preferencesManager.defaultFormat
@@ -32,6 +34,12 @@ class SettingsViewModel @Inject constructor(
     fun updateThemeMode(mode: String) {
         viewModelScope.launch {
             preferencesManager.setThemeMode(mode)
+        }
+    }
+
+    fun checkForUpdates(currentVersion: String) {
+        viewModelScope.launch {
+            appUpdater.checkForUpdates(currentVersion, manualCheck = true)
         }
     }
 }

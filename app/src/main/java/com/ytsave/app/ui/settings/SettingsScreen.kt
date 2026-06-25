@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
 import com.ytsave.app.domain.model.FormatType
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -21,6 +22,13 @@ import com.ytsave.app.domain.model.FormatType
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
+    val versionName = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.2"
+        } catch (e: Exception) { "0.0.2" }
+    }
+
     val defaultFormat by viewModel.defaultFormat.collectAsStateWithLifecycle()
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -96,7 +104,13 @@ fun SettingsScreen(
                         Column {
                             ListItem(
                                 headlineContent = { Text("Version") },
-                                supportingContent = { Text("1.0.0") }
+                                supportingContent = { Text(versionName) }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            ListItem(
+                                headlineContent = { Text("Check for Updates") },
+                                trailingContent = { Icon(Icons.Filled.ChevronRight, null) },
+                                modifier = Modifier.clickable { viewModel.checkForUpdates(versionName) }
                             )
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             ListItem(
