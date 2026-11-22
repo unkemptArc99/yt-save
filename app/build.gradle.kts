@@ -1,3 +1,6 @@
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,7 +8,31 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("com.chaquo.python")
+}
+
+val ytDlpVersion = "2026.10.26"
+val ytDlpSha256 = "e51e69e89489f199530f13d32a4342da3ddb2cf34842f364603a066db05afbf3"
+val ytDlpAssets = layout.buildDirectory.dir("generated/yt-dlp/assets")
+val downloadYtDlp by tasks.registering {
+    inputs.property("version", ytDlpVersion)
+    inputs.property("sha256", ytDlpSha256)
+    val asset = ytDlpAssets.map { it.file("yt-dlp") }
+    outputs.file(asset)
+    doLast {
+        val connection = URI("https://github.com/yt-dlp/yt-dlp/releases/download/$ytDlpVersion/yt-dlp")
+            .toURL().openConnection().apply {
+                connectTimeout = 30_000
+                readTimeout = 30_000
+            }
+        val content = connection.getInputStream().use { it.readBytes() }
+        val digest = MessageDigest.getInstance("SHA-256").digest(content)
+            .joinToString("") { "%02x".format(it) }
+        check(digest == ytDlpSha256) { "Checksum mismatch for yt-dlp $ytDlpVersion" }
+        asset.get().asFile.apply {
+            parentFile.mkdirs()
+            writeBytes(content)
+        }
+    }
 }
 
 android {
@@ -16,8 +43,9 @@ android {
         applicationId = "com.ytsave.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.0.3"
+        versionCode = 4
+        versionName = "0.0.4"
+        buildConfigField("String", "YT_DLP_VERSION", "\"$ytDlpVersion\"")
         
         setProperty("archivesBaseName", "YTSave-$versionName")
 
@@ -41,7 +69,12 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+
+    sourceSets.getByName("main").assets.srcDir(ytDlpAssets)
+
+    packaging.jniLibs.useLegacyPackaging = true
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -53,16 +86,7 @@ android {
     }
 }
 
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-        pip {
-            install("yt-dlp>=2026.6.9")
-            install("certifi")
-            install("requests")
-        }
-    }
-}
+tasks.named("preBuild") { dependsOn(downloadYtDlp) }
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
@@ -105,8 +129,9 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.0")
     
-    // FFmpegKit
-    implementation("com.arthenica:ffmpeg-kit-full-gpl:6.0-2.LTS")
+    val ytDlpAndroid = "0.18.1"
+    implementation("io.github.junkfood02.youtubedl-android:library:$ytDlpAndroid")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$ytDlpAndroid")
     
     // Coil
     implementation("io.coil-kt:coil-compose:2.6.0")

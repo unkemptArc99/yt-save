@@ -28,8 +28,7 @@ Since YTSave downloads media directly from YouTube, it is not available on the G
 - **Architecture:** MVVM + Clean Architecture
 - **Dependency Injection:** Dagger Hilt
 - **Background Tasks:** Android WorkManager
-- **Core Engine:** `yt-dlp` powered by [Chaquopy](https://chaquo.com/chaquopy/) (Python for Android)
-- **Processing:** FFmpegKit
+- **Core Engine:** `yt-dlp` with Python, QuickJS, and FFmpeg bundled through [youtubedl-android](https://github.com/yausername/youtubedl-android)
 
 ## 🤝 Contributing
 Feel free to open an issue or submit a pull request if you have ideas on how to improve the app!

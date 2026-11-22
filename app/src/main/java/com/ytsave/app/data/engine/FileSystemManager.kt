@@ -7,10 +7,11 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.io.FileInputStream
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,11 +19,9 @@ import javax.inject.Singleton
 class FileSystemManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun getTempDownloadDir(): File {
-        val dir = File(context.cacheDir, "downloads")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
+    fun getTempDownloadDir(downloadId: Long): File {
+        val dir = File(context.cacheDir, "downloads/$downloadId")
+        check(dir.mkdirs() || dir.isDirectory) { "Could not create download directory" }
         return dir
     }
 
@@ -39,18 +38,19 @@ class FileSystemManager @Inject constructor(
         return File(getStorageDir(), "$title.$ext").absolutePath
     }
 
-    fun moveToPublicStorage(sourceFile: File, title: String): File {
+    fun moveToPublicStorage(sourceFile: File, title: String, isAudio: Boolean): File {
         val ext = sourceFile.extension.ifEmpty { "mp4" }
-        val isAudio = ext in listOf("m4a", "mp3", "opus")
-        
         val safeTitle = title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+        val directory = if (isAudio) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
+        val mediaType = if (isAudio) "audio" else "video"
+        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?.takeIf { it.startsWith("$mediaType/") } ?: "$mediaType/$ext"
         
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "$safeTitle.$ext")
-            put(MediaStore.MediaColumns.MIME_TYPE, if (isAudio) "audio/$ext" else "video/$ext")
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val dir = if (isAudio) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "$dir/YTSave")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "$directory/YTSave")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
         }
@@ -67,24 +67,22 @@ class FileSystemManager @Inject constructor(
         val uri = resolver.insert(collection, contentValues)
             ?: throw RuntimeException("Failed to create MediaStore entry")
 
-        resolver.openOutputStream(uri)?.use { outStream ->
-            FileInputStream(sourceFile).use { inStream ->
-                inStream.copyTo(outStream)
+        try {
+            val output = resolver.openOutputStream(uri) ?: throw IOException("Could not open the media file")
+            output.use { stream -> sourceFile.inputStream().use { it.copyTo(stream) } }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val published = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+                check(resolver.update(uri, published, null, null) > 0) { "Could not publish the media file" }
             }
+            // MediaStore can choose a different filename when a download with this title already exists.
+            val path = resolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use {
+                if (it.moveToFirst()) it.getString(0) else null
+            } ?: throw IOException("Could not resolve the saved media file")
+            return File(path)
+        } catch (error: Exception) {
+            resolver.delete(uri, null, null)
+            throw error
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            contentValues.clear()
-            contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-            resolver.update(uri, contentValues, null, null)
-        }
-
-        sourceFile.delete()
-        
-        // On older Android, we might need the actual path
-        val dirName = if (isAudio) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
-        val fallbackDir = File(Environment.getExternalStoragePublicDirectory(dirName), "YTSave")
-        return File(fallbackDir, "$safeTitle.$ext")
     }
 
     fun deleteVideoFile(filePath: String): Boolean {
@@ -110,7 +108,8 @@ class FileSystemManager @Inject constructor(
             file
         )
 
-        val isAudio = file.extension in listOf("m4a", "mp3", "opus")
+        val isAudio = file.extension in listOf("m4a", "mp3", "opus") ||
+            file.parentFile?.parentFile?.name == Environment.DIRECTORY_MUSIC
         val mimeType = if (isAudio) "audio/*" else "video/*"
 
         val intent = Intent(Intent.ACTION_VIEW).apply {

@@ -10,8 +10,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://chaquo.com/maven-test") }
-        maven { url = uri("https://artifactory.appodeal.com/appodeal-public/") }
     }
 }
 
