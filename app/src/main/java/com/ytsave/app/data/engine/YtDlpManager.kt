@@ -32,8 +32,12 @@ class YtDlpManager @Inject constructor(
 ) {
     private val engine by lazy {
         installBundledYtDlp()
-        YoutubeDL.init(context)
-        FFmpeg.init(context)
+        try {
+            YoutubeDL.init(context)
+            FFmpeg.init(context)
+        } catch (error: LinkageError) {
+            throw IOException("Could not initialize the download engine", error)
+        }
         YoutubeDL
     }
 

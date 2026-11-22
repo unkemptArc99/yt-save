@@ -12,14 +12,20 @@ plugins {
 
 val ytDlpVersion = "2026.10.26"
 val ytDlpSha256 = "e51e69e89489f199530f13d32a4342da3ddb2cf34842f364603a066db05afbf3"
-val ytDlpAssets = layout.buildDirectory.dir("generated/yt-dlp/assets")
-val downloadYtDlp by tasks.registering {
-    inputs.property("version", ytDlpVersion)
-    inputs.property("sha256", ytDlpSha256)
-    val asset = ytDlpAssets.map { it.file("yt-dlp") }
-    outputs.file(asset)
-    doLast {
-        val connection = URI("https://github.com/yt-dlp/yt-dlp/releases/download/$ytDlpVersion/yt-dlp")
+abstract class DownloadYtDlp : DefaultTask() {
+    @get:Input
+    abstract val version: Property<String>
+
+    @get:Input
+    abstract val sha256: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun download() {
+        val releaseVersion = version.get()
+        val connection = URI("https://github.com/yt-dlp/yt-dlp/releases/download/$releaseVersion/yt-dlp")
             .toURL().openConnection().apply {
                 connectTimeout = 30_000
                 readTimeout = 30_000
@@ -27,8 +33,8 @@ val downloadYtDlp by tasks.registering {
         val content = connection.getInputStream().use { it.readBytes() }
         val digest = MessageDigest.getInstance("SHA-256").digest(content)
             .joinToString("") { "%02x".format(it) }
-        check(digest == ytDlpSha256) { "Checksum mismatch for yt-dlp $ytDlpVersion" }
-        asset.get().asFile.apply {
+        check(digest == sha256.get()) { "Checksum mismatch for yt-dlp $releaseVersion" }
+        outputDirectory.file("yt-dlp").get().asFile.apply {
             parentFile.mkdirs()
             writeBytes(content)
         }
@@ -43,11 +49,9 @@ android {
         applicationId = "com.ytsave.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.0.4"
+        versionCode = 5
+        versionName = "0.0.5"
         buildConfigField("String", "YT_DLP_VERSION", "\"$ytDlpVersion\"")
-        
-        setProperty("archivesBaseName", "YTSave-$versionName")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -72,8 +76,6 @@ android {
         buildConfig = true
     }
 
-    sourceSets.getByName("main").assets.srcDir(ytDlpAssets)
-
     packaging.jniLibs.useLegacyPackaging = true
 
     compileOptions {
@@ -86,7 +88,21 @@ android {
     }
 }
 
-tasks.named("preBuild") { dependsOn(downloadYtDlp) }
+base {
+    archivesName.set("YTSave-${android.defaultConfig.versionName}")
+}
+
+androidComponents {
+    onVariants { variant ->
+        val downloadYtDlp = tasks.register<DownloadYtDlp>(
+            "download${variant.name.replaceFirstChar { it.uppercaseChar() }}YtDlp"
+        ) {
+            version.set(ytDlpVersion)
+            sha256.set(ytDlpSha256)
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(downloadYtDlp, DownloadYtDlp::outputDirectory)
+    }
+}
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
@@ -112,13 +128,14 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     
     // Room
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    val roomVersion = "2.7.2"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
     
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.51.1")
-    ksp("com.google.dagger:hilt-compiler:2.51.1")
+    implementation("com.google.dagger:hilt-android:2.59.2")
+    ksp("com.google.dagger:hilt-compiler:2.59.2")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     implementation("androidx.hilt:hilt-work:1.2.0")
     ksp("androidx.hilt:hilt-compiler:1.2.0")
